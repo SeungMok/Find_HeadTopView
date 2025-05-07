@@ -3,6 +3,7 @@ import numpy as np
 from PyQt5.QtWidgets import QFileDialog
 from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtCore import Qt
+from ai.yolo_segmentor import Yolo_segmentor
 
 class MainController:
     def __init__(self, view):
@@ -15,6 +16,8 @@ class MainController:
         self.view.rotate_button.clicked.connect(self.rotate_image)
         self.view.flip_button.clicked.connect(self.flip_image)
         self.view.contour_button.clicked.connect(self.toggle_contours)
+
+        self.ai = Yolo_segmentor()
 
     def load_image(self):
         path, _ = QFileDialog.getOpenFileName(self.view, "이미지 불러오기", "", "Image Files (*.png *.jpg *.bmp)")
@@ -42,9 +45,16 @@ class MainController:
             # Contours 모드 진입
             if self.image is not None:
                 self.original_image = self.image.copy()
+
+                # ================= include AI =================
+                # contours = self.ai.get_contours(self.image)
+                # ==============================================
+
+                # ================= not include AI =========================
                 gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
                 edges = cv2.Canny(gray, 100, 200)
                 contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                # ==========================================================
                 contour_img = np.zeros_like(self.image)
                 cv2.drawContours(contour_img, contours, -1, (0, 255, 0), 2)
                 self.image = contour_img
