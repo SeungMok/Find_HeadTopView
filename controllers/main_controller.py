@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import QFileDialog
 from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtCore import Qt
 from ai.yolo_segmentor import Yolo_segmentor
+from config import USE_AI
 
 class MainController:
     def __init__(self, view):
@@ -16,6 +17,7 @@ class MainController:
         self.view.rotate_button.clicked.connect(self.rotate_image)
         self.view.flip_button.clicked.connect(self.flip_image)
         self.view.contour_button.clicked.connect(self.toggle_contours)
+        self.view.contour_button.setEnabled(False)
 
         self.ai = Yolo_segmentor()
 
@@ -42,28 +44,20 @@ class MainController:
 
     def toggle_contours(self):
         if not self.contour_mode:
-            # Contours 모드 진입
-            if self.image is not None:
-                self.original_image = self.image.copy()
-
-                # ================= include AI =================
-                # contours = self.ai.get_contours(self.image)
-                # ==============================================
-
-                # ================= not include AI =========================
+            if USE_AI:
+                contours = self.ai.get_contours(self.image)
+            else:
                 gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
                 edges = cv2.Canny(gray, 100, 200)
                 contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                # ==========================================================
-                contour_img = np.zeros_like(self.image)
-                cv2.drawContours(contour_img, contours, -1, (0, 255, 0), 2)
-                self.image = contour_img
-                self.display_image(self.image)
 
-                self.contour_mode = True
-                self.view.contour_button.setText("Cancel")
-                self.view.flip_button.setEnabled(False)
-                self.view.rotate_button.setEnabled(False)
+            cv2.drawContours(self.image, contours, -1, (0, 255, 0), 2)
+            self.display_image(self.image)
+
+            self.contour_mode = True
+            self.view.contour_button.setText("Cancel")
+            self.view.flip_button.setEnabled(False)
+            self.view.rotate_button.setEnabled(False)
         else:
             # 원래 이미지 복원
             self.image = self.original_image.copy()
@@ -85,6 +79,7 @@ class MainController:
 
     def reset_buttons(self):
         self.contour_mode = False
+        self.view.contour_button.setEnabled(True)
         self.view.contour_button.setText("Contours")
         self.view.flip_button.setEnabled(True)
         self.view.rotate_button.setEnabled(True)
