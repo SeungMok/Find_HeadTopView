@@ -3,11 +3,11 @@ import numpy as np
 from ultralytics import YOLO
 from config import DEBUG
 
-import math
-
 class Yolo_segmentor:
     def __init__(self):
         self._model = YOLO("ai/YOLODataset/runs/segment/train/weights/best.pt")
+        self._roi = None
+        self._roi_coord = None # (x,y,w,h)
 
     def get_contours(self, image):
         results = self._model(image)
@@ -35,9 +35,10 @@ class Yolo_segmentor:
             w = min(w + 2 * padding, original_shape[1] - x)
             h = min(h + 2 * padding, original_shape[0] - y)
 
-            roi = image[y:y+h, x:x+w]
-            mask_roi = mask_uint8[y:y+h, x:x+w]
+            self._roi = image[y:y+h, x:x+w]
+            self._roi_coord = (x, y, w, h)
 
+            mask_roi = mask_uint8[y:y+h, x:x+w]
             edges = cv2.Canny(mask_roi, 100, 200)
             contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -46,11 +47,7 @@ class Yolo_segmentor:
                 cnt[:, 0, 1] += y
                 all_contours.append(cnt)
             if DEBUG:
-                 cv2.imwrite(f"roi_debug_{x}_{y}.jpg", roi)
-
-            # 사두 분석선 및 교차점 그리기
-            analyzed_img, _ = self.draw_analysis_lines_and_points(image.copy(), all_contours, x, y, w, h)
-            cv2.imwrite("analyzed_result.jpg", analyzed_img)
+                 cv2.imwrite(f"roi_debug_{x}_{y}.jpg", self._roi)
 
             return all_contours
         # return self.delete_noise(image,all_contours)
@@ -84,41 +81,11 @@ class Yolo_segmentor:
     #     else:
     #         return []  # 유효한 contour가 없으면 빈 리스트 반환
 
-    def draw_analysis_lines_and_points(self, image, contours, x, y, w, h):
-        # ROI 중심점 계산
-        center_x = x + w // 2
-        center_y = y + h // 2
-
-        # 분석을 위한 각도 (수직, 수평, 30도, -30도)
-        angles = [0, 90, 60, -60]
-        length = 800  # 선의 길이
-
-        points_on_contour = []
-
-        for angle in angles:
-            rad = math.radians(angle)
-            dx = int(math.cos(rad) * length)
-            dy = int(math.sin(rad) * length)
-
-            pt1 = (center_x - dx, center_y - dy)
-            pt2 = (center_x + dx, center_y + dy)
-
-            # 선 그리기
-            cv2.line(image, pt1, pt2, (0, 255, 0), 1)
-
-            # 선과 contour의 교차점 찾기
-            for cnt in contours:
-                for pt in cnt:
-                    px, py = pt[0]
-                    # 직선의 거리로 근사: |Ax + By + C| < ε
-                    dist = abs((pt2[1] - pt1[1]) * px - (pt2[0] - pt1[0]) * py +
-                            pt2[0]*pt1[1] - pt2[1]*pt1[0]) / (
-                            ((pt2[1] - pt1[1])**2 + (pt2[0] - pt1[0])**2)**0.5)
-                    if dist < 2:  # 근사 임계값
-                        cv2.circle(image, (px, py), 3, (0, 0, 255), -1)
-                        points_on_contour.append((px, py))
-
-        return image, points_on_contour
+    def get_roi(self):
+        return self._roi
+    
+    def get_roi_coord(self):
+        return self._roi_coord
 
     def delete_noise(self, image, contours):
         h, w = image.shape[:2]

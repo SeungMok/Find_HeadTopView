@@ -5,6 +5,9 @@ from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtCore import Qt
 from ai.yolo_segmentor import Yolo_segmentor
 from config import USE_AI
+from config import DEBUG
+
+import math
 
 class MainController:
     def __init__(self, view):
@@ -52,6 +55,7 @@ class MainController:
                 contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             cv2.drawContours(self.image, contours, -1, (0, 255, 0), 2)
+            self.draw_analysis_lines_points(self.image, contours)
             self.display_image(self.image)
 
             self.contour_mode = True
@@ -83,3 +87,61 @@ class MainController:
         self.view.contour_button.setText("Contours")
         self.view.flip_button.setEnabled(True)
         self.view.rotate_button.setEnabled(True)
+
+    def draw_analysis_lines_points(self, image, contours):
+        x,y,w,h = self.ai.get_roi_coord() # x,y,w,h
+        min_distance = 10 # 교차점 그릴 때, 근처 중복 점 방지
+        
+        # ROI 중심점 계산
+        center_x = x + w // 2
+        center_y = y + h // 2
+
+        # 분석을 위한 각도 (수직, 수평, 30도, -30도)
+        angles = [0, 90, 60, -60]
+        length = 800  # 선의 길이
+
+        points_on_contour = []
+
+        for angle in angles:
+            rad = math.radians(angle)
+            dx = int(math.cos(rad) * length)
+            dy = int(math.sin(rad) * length)
+
+            pt1 = (center_x - dx, center_y - dy)
+            pt2 = (center_x + dx, center_y + dy)
+
+            # 선 그리기
+            cv2.line(image, pt1, pt2, (0, 0, 0), 3)
+
+            if angle in [60, -60]:
+                # 선과 contour의 교차점 찾기
+                # pt1 = (x1, y1), pt2 = (x2, y2)
+                A = pt2[1] - pt1[1]
+                B = pt1[0] - pt2[0]
+                C = pt2[0]*pt1[1] - pt1[0]*pt2[1]
+
+                for cnt in contours:
+                    for pt in cnt:
+                        px, py = pt[0]
+                        dist = abs(A * px + B * py + C) / math.sqrt(A*A + B*B)
+
+                        if dist < 5:
+                            # 선분 범위 체크
+                            dot = (px - pt1[0]) * (pt2[0] - pt1[0]) + (py - pt1[1]) * (pt2[1] - pt1[1])
+                            len_sq = (pt2[0] - pt1[0])**2 + (pt2[1] - pt1[1])**2
+                            if 0 <= dot <= len_sq:
+                                
+                                # 이미 찍힌 점들과 충분히 멀리 있는지 확인
+                                is_far_enough = True
+                                for existing_pt in points_on_contour:
+                                    if math.hypot(existing_pt[0] - px, existing_pt[1] - py) < min_distance:
+                                        is_far_enough = False
+                                        break
+                                
+                                if is_far_enough:
+                                    cv2.circle(image, (px, py), 10, (0, 0, 255), -1)
+                                    points_on_contour.append((px, py))
+        if DEBUG:
+            cv2.imwrite("analyzed_result.jpg", image)
+
+        return image, points_on_contour
