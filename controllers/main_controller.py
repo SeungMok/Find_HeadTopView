@@ -89,18 +89,63 @@ class MainController:
         self.view.rotate_button.setEnabled(True)
 
     def draw_analysis_lines_points(self, image, contours):
-        x,y,w,h = self.ai.get_roi_coord() # x,y,w,h
-        min_distance = 10 # 교차점 그릴 때, 근처 중복 점 방지
-        
+        x, y, w, h = self.ai.get_roi_coord()  # x,y,w,h
+        min_distance = 10  # 교차점 그릴 때, 근처 중복 점 방지
+
         # ROI 중심점 계산
         center_x = x + w // 2
         center_y = y + h // 2
 
-        # 분석을 위한 각도 (수직, 수평, 30도, -30도)
+        # 분석을 위한 각도 (수평, 수직, 60도, -60도)
         angles = [0, 90, 60, -60]
         length = 800  # 선의 길이
 
-        points_on_contour = []
+        intersections = {
+            1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None, 8: None
+        }
+        intersection_points = [] # 중복 방지 및 거리 계산을 위해 사용
+
+        def is_on_segment(p, a, b):
+            #점 p가 선분 a-b 위에 있는지 확인
+            return (min(a[0], b[0]) <= p[0] <= max(a[0], b[0]) and
+                    min(a[1], b[1]) <= p[1] <= max(a[1], b[1]) and
+                    abs((b[1] - a[1]) * (p[0] - a[0]) - (b[0] - a[0]) * (p[1] - a[1])) < 1e-6)
+
+        def find_intersection(contour, p1, p2):
+            #윤곽선과 선분의 교차점 찾기
+            intersection_pts = []
+            for i in range(len(contour)):
+                c_p1 = contour[i][0]
+                c_p2 = contour[(i + 1) % len(contour)][0]  # 닫힌 윤곽선 처리
+
+                # 선분 교차 판정 (간단한 방식)
+                def on_segment(p, a, b):
+                    return (min(a[0], b[0]) <= p[0] <= max(a[0], b[0]) and
+                            min(a[1], b[1]) <= p[1] <= max(a[1], b[1]) and
+                            abs((b[1] - a[1]) * (p[0] - a[0]) - (b[0] - a[0]) * (p[1] - a[1])) < 1e-6)
+
+                def orientation(p, q, r):
+                    val = (q[1] - p[1]) * (r[0] - q[0]) - (q[0] - p[0]) * (r[1] - q[1])
+                    if abs(val) < 1e-6: return 0  # Collinear
+                    return 1 if val > 0 else 2  # Clockwise or Counterclockwise
+
+                o1 = orientation(p1, p2, c_p1)
+                o2 = orientation(p1, p2, c_p2)
+                o3 = orientation(c_p1, c_p2, p1)
+                o4 = orientation(c_p1, c_p2, p2)
+
+                if o1 != o2 and o3 != o4:
+                    # 교점 계산
+                    det = (p1[0] - p2[0]) * (c_p1[1] - c_p2[1]) - (p1[1] - p2[1]) * (c_p1[0] - c_p2[0])
+                    if abs(det) > 1e-6:
+                        t = ((p1[0] - c_p1[0]) * (c_p1[1] - c_p2[1]) - (p1[1] - c_p1[1]) * (c_p1[0] - c_p2[0])) / det
+                        u = -((p1[0] - p2[0]) * (p1[1] - c_p1[1]) - (p1[1] - p2[1]) * (p1[0] - c_p1[0])) / det
+                        if 0 <= t <= 1 and 0 <= u <= 1:
+                            intersection_x = p1[0] + t * (p2[0] - p1[0])
+                            intersection_y = p1[1] + t * (p2[1] - p1[1])
+                            intersection_pts.append((int(intersection_x), int(intersection_y)))
+
+            return intersection_pts
 
         for angle in angles:
             rad = math.radians(angle)
@@ -113,35 +158,66 @@ class MainController:
             # 선 그리기
             cv2.line(image, pt1, pt2, (0, 0, 0), 3)
 
-            if angle in [60, -60]:
-                # 선과 contour의 교차점 찾기
-                # pt1 = (x1, y1), pt2 = (x2, y2)
-                A = pt2[1] - pt1[1]
-                B = pt1[0] - pt2[0]
-                C = pt2[0]*pt1[1] - pt1[0]*pt2[1]
+            found_intersections = []
+            for cnt in contours:
+                found_intersections.extend(find_intersection(cnt, pt1, pt2))
 
-                for cnt in contours:
-                    for pt in cnt:
-                        px, py = pt[0]
-                        dist = abs(A * px + B * py + C) / math.sqrt(A*A + B*B)
+            # 각도에 따라 교차점 분류 및 저장
+            if angle == 0:  # 수평선
+                left_point = None
+                right_point = None
+                for pt in found_intersections:
+                    if left_point is None or pt[0] < left_point[0]:
+                        left_point = pt
+                    if right_point is None or pt[0] > right_point[0]:
+                        right_point = pt
+                if left_point:
+                    intersections[1] = left_point
+                if right_point:
+                    intersections[2] = right_point
+            elif angle == 90:  # 수직선
+                top_point = None
+                bottom_point = None
+                for pt in found_intersections:
+                    if top_point is None or pt[1] < top_point[1]:
+                        top_point = pt
+                    if bottom_point is None or pt[1] > bottom_point[1]:
+                        bottom_point = pt
+                if top_point:
+                    intersections[3] = top_point
+                if bottom_point:
+                    intersections[4] = bottom_point
+            elif angle == 60:
+                top_point = None
+                bottom_point = None
+                for pt in found_intersections:
+                    if top_point is None or pt[1] < top_point[1] - (pt[0] - center_x) * math.tan(math.radians(60)):
+                        top_point = pt
+                    if bottom_point is None or pt[1] > bottom_point[1] - (pt[0] - center_x) * math.tan(math.radians(60)):
+                        bottom_point = pt
+                if top_point:
+                    intersections[5] = top_point
+                if bottom_point:
+                    intersections[7] = bottom_point
+            elif angle == -60:
+                top_point = None
+                bottom_point = None
+                for pt in found_intersections:
+                    if top_point is None or pt[1] < top_point[1] - (pt[0] - center_x) * math.tan(math.radians(-60)):
+                        top_point = pt
+                    if bottom_point is None or pt[1] > bottom_point[1] - (pt[0] - center_x) * math.tan(math.radians(-60)):
+                        bottom_point = pt
+                if top_point:
+                    intersections[6] = top_point
+                if bottom_point:
+                    intersections[8] = bottom_point
 
-                        if dist < 5:
-                            # 선분 범위 체크
-                            dot = (px - pt1[0]) * (pt2[0] - pt1[0]) + (py - pt1[1]) * (pt2[1] - pt1[1])
-                            len_sq = (pt2[0] - pt1[0])**2 + (pt2[1] - pt1[1])**2
-                            if 0 <= dot <= len_sq:
-                                
-                                # 이미 찍힌 점들과 충분히 멀리 있는지 확인
-                                is_far_enough = True
-                                for existing_pt in points_on_contour:
-                                    if math.hypot(existing_pt[0] - px, existing_pt[1] - py) < min_distance:
-                                        is_far_enough = False
-                                        break
-                                
-                                if is_far_enough:
-                                    cv2.circle(image, (px, py), 10, (0, 0, 255), -1)
-                                    points_on_contour.append((px, py))
+        # 교차점 그리기 및 번호 표시
+        for number, point in intersections.items():
+            if point:
+                cv2.circle(image, point, 10, (0, 0, 255), -1)
+                cv2.putText(image, str(number), (point[0] + 15, point[1] + 15),
+                            cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 255), 2)
+
         if DEBUG:
             cv2.imwrite("analyzed_result.jpg", image)
-
-        return image, points_on_contour
