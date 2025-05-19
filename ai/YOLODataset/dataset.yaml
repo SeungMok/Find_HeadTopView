@@ -1,0 +1,7 @@
+path: \\?\C:\Users\smlee\Desktop\image\imge_labelFile\YOLODataset
+train: images/train
+val: images/val
+test: images/test
+
+names:
+    0: head_topView
