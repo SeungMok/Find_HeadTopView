@@ -11,6 +11,8 @@ class MainWindow(QWidget):
 
         self.image_label = ImageLabel()
         self.image_label.setMinimumHeight(600)
+        self.image_label.setMaximumHeight(800)
+        self.image_label.setMinimumWidth(600)
 
         self.load_button = QPushButton("Load")
         self.rotate_button = QPushButton("Rotate")

@@ -30,6 +30,10 @@ class MainController:
 
         self.ai = Yolo_segmentor()
 
+        self.base_image_width = 1000
+        self.base_image_height = 1000
+        self.scale = 1.0
+
     def reset_table_UI(self):
         item = QTableWidgetItem("")
         item.setBackground(QBrush(QColor("white")))
@@ -80,7 +84,8 @@ class MainController:
                 edges = cv2.Canny(gray, 100, 200)
                 contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            cv2.drawContours(self.image, contours, -1, (0, 255, 0), 2)
+            self.set_scale()    # 선, 점, 글자 크기 조정정
+            cv2.drawContours(self.image, contours, -1, (0, 255, 0), (int)(2*self.scale))
             self.draw_analysis_lines_points(self.image, contours)
             self.display_image(self.image)
 
@@ -109,7 +114,7 @@ class MainController:
         qimg = QImage(rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
         pixmap = QPixmap.fromImage(qimg).scaled(
             self.view.image_label.width(), self.view.image_label.height(), Qt.KeepAspectRatio)
-        self.view.image_label.setPixmap(pixmap)
+        self.view.image_label.set_image(pixmap)
 
     def reset_buttons(self):
         self.contour_mode = False
@@ -128,7 +133,6 @@ class MainController:
 
         # 분석을 위한 각도 (수평, 수직, 60도, -60도)
         angles = [0, 90, 60, -60]
-        length = 800  # 선의 길이
 
         intersection_points = [] # 중복 방지 및 거리 계산을 위해 사용
 
@@ -176,14 +180,14 @@ class MainController:
 
         for angle in angles:
             rad = math.radians(angle)
-            dx = int(math.cos(rad) * length)
-            dy = int(math.sin(rad) * length)
+            dx = int(math.cos(rad) * w)
+            dy = int(math.sin(rad) * h)
 
             pt1 = (center_x - dx, center_y - dy)
             pt2 = (center_x + dx, center_y + dy)
 
             # 선 그리기
-            cv2.line(image, pt1, pt2, (0, 0, 0), 3)
+            cv2.line(image, pt1, pt2, (0, 0, 0), (int)(3*self.scale))
 
             found_intersections = []
             for cnt in contours:
@@ -242,9 +246,9 @@ class MainController:
         # 교차점 그리기 및 번호 표시
         for number, point in self.intersections.items():
             if point:
-                cv2.circle(image, point, 10, (0, 0, 255), -1)
+                cv2.circle(image, point, (int)(10*self.scale), (0, 0, 255), -1)
                 cv2.putText(image, str(number), (point[0] + 15, point[1] + 15),
-                            cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 255), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, (float)(2*self.scale), (0, 255, 255), (int)(2*self.scale))
 
         if DEBUG:
             cv2.imwrite("analyzed_result.jpg", image)
@@ -303,3 +307,10 @@ class MainController:
         else:
             item.setBackground(QBrush(QColor("yellow")))
         self.view.table.setItem(1, 0, item)
+
+    def set_scale(self):
+        _h, _w = self.original_image.shape[:2]
+
+        width_scale = _w / self.base_image_width
+        height_scale = _h / self.base_image_height
+        self.scale = (width_scale + height_scale) / 2
