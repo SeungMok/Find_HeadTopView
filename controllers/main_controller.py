@@ -149,8 +149,8 @@ class MainController:
             #윤곽선과 선분의 교차점 찾기
             intersection_pts = []
             for i in range(len(contour)):
-                c_p1 = contour[i][0]
-                c_p2 = contour[(i + 1) % len(contour)][0]  # 닫힌 윤곽선 처리
+                c_start = contour[i][0]
+                c_end = contour[(i + 1) % len(contour)][0]  # 닫힌 윤곽선 처리
 
                 # 선분 교차 판정
                 def on_segment(p, a, b):
@@ -163,17 +163,17 @@ class MainController:
                     if abs(val) < 1e-6: return 0  # Collinear
                     return 1 if val > 0 else 2  # Clockwise or Counterclockwise
 
-                o1 = orientation(p1, p2, c_p1)
-                o2 = orientation(p1, p2, c_p2)
-                o3 = orientation(c_p1, c_p2, p1)
-                o4 = orientation(c_p1, c_p2, p2)
+                o1 = orientation(p1, p2, c_start)
+                o2 = orientation(p1, p2, c_end)
+                o3 = orientation(c_start, c_end, p1)
+                o4 = orientation(c_start, c_end, p2)
 
                 if o1 != o2 and o3 != o4:
                     # 교점 계산
-                    det = (p1[0] - p2[0]) * (c_p1[1] - c_p2[1]) - (p1[1] - p2[1]) * (c_p1[0] - c_p2[0])
+                    det = (p1[0] - p2[0]) * (c_start[1] - c_end[1]) - (p1[1] - p2[1]) * (c_start[0] - c_end[0])
                     if abs(det) > 1e-6:
-                        t = ((p1[0] - c_p1[0]) * (c_p1[1] - c_p2[1]) - (p1[1] - c_p1[1]) * (c_p1[0] - c_p2[0])) / det
-                        u = -((p1[0] - p2[0]) * (p1[1] - c_p1[1]) - (p1[1] - p2[1]) * (p1[0] - c_p1[0])) / det
+                        t = ((p1[0] - c_start[0]) * (c_start[1] - c_end[1]) - (p1[1] - c_start[1]) * (c_start[0] - c_end[0])) / det
+                        u = -((p1[0] - p2[0]) * (p1[1] - c_start[1]) - (p1[1] - p2[1]) * (p1[0] - c_start[0])) / det
                         if 0 <= t <= 1 and 0 <= u <= 1:
                             intersection_x = p1[0] + t * (p2[0] - p1[0])
                             intersection_y = p1[1] + t * (p2[1] - p1[1])
