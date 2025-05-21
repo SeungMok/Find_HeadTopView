@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from PyQt5.QtWidgets import QFileDialog, QTableWidgetItem
+from PyQt5.QtWidgets import QFileDialog, QTableWidgetItem, QMessageBox
 from PyQt5.QtGui import QPixmap, QImage, QColor, QBrush
 from PyQt5.QtCore import Qt
 from ai.yolo_segmentor import Yolo_segmentor
@@ -84,13 +84,16 @@ class MainController:
                 edges = cv2.Canny(gray, 100, 200)
                 contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            self.set_scale()    # 선, 점, 글자 크기 조정정
+            self.set_scale()    # 선, 점, 글자 크기 조정
             cv2.drawContours(self.image, contours, -1, (0, 255, 0), (int)(2*self.scale))
             self.draw_analysis_lines_points(self.image, contours)
             self.display_image(self.image)
 
             self.set_table_CI()
             self.set_table_CVAI()
+            # if(False == self.set_table_CI() or False == self.set_table_CVAI()):
+            #     QMessageBox.warning(self.view, "Error", "머리가 모두 나오도록 사진을 찍어주세요.")
+            #     return
 
             self.contour_mode = True
             self.view.contour_button.setText("Cancel")
@@ -125,7 +128,6 @@ class MainController:
 
     def draw_analysis_lines_points(self, image, contours):
         x, y, w, h = self.ai.get_roi_coord()  # x,y,w,h
-        min_distance = 10  # 교차점 그릴 때, 근처 중복 점 방지
 
         # ROI 중심점 계산
         center_x = x + w // 2
@@ -134,43 +136,29 @@ class MainController:
         # 분석을 위한 각도 (수평, 수직, 60도, -60도)
         angles = [0, 90, 60, -60]
 
-        intersection_points = [] # 중복 방지 및 거리 계산을 위해 사용
-
-        def is_on_segment(p, a, b):
-            #점 p가 선분 a-b 위에 있는지 확인
-            return (min(a[0], b[0]) <= p[0] <= max(a[0], b[0]) and
-                    min(a[1], b[1]) <= p[1] <= max(a[1], b[1]) and
-                    abs((b[1] - a[1]) * (p[0] - a[0]) - (b[0] - a[0]) * (p[1] - a[1])) < 1e-6)
-
         def find_intersection(contour, p1, p2):
             #윤곽선과 선분의 교차점 찾기
             intersection_pts = []
             for i in range(len(contour)):
-                c_p1 = contour[i][0]
-                c_p2 = contour[(i + 1) % len(contour)][0]  # 닫힌 윤곽선 처리
-
-                # 선분 교차 판정
-                def on_segment(p, a, b):
-                    return (min(a[0], b[0]) <= p[0] <= max(a[0], b[0]) and
-                            min(a[1], b[1]) <= p[1] <= max(a[1], b[1]) and
-                            abs((b[1] - a[1]) * (p[0] - a[0]) - (b[0] - a[0]) * (p[1] - a[1])) < 1e-6)
+                c_start = contour[i][0]
+                c_end = contour[(i + 1) % len(contour)][0]  # 닫힌 윤곽선 처리
 
                 def orientation(p, q, r):
                     val = (q[1] - p[1]) * (r[0] - q[0]) - (q[0] - p[0]) * (r[1] - q[1])
-                    if abs(val) < 1e-6: return 0  # Collinear
-                    return 1 if val > 0 else 2  # Clockwise or Counterclockwise
+                    if abs(val) < 1e-6: return 0  # 세 점이 일직선 상에 존재재
+                    return 1 if val > 0 else 2  # 1: 시계방향, 2: 반시계방향
 
-                o1 = orientation(p1, p2, c_p1)
-                o2 = orientation(p1, p2, c_p2)
-                o3 = orientation(c_p1, c_p2, p1)
-                o4 = orientation(c_p1, c_p2, p2)
+                o1 = orientation(p1, p2, c_start)
+                o2 = orientation(p1, p2, c_end)
+                o3 = orientation(c_start, c_end, p1)
+                o4 = orientation(c_start, c_end, p2)
 
                 if o1 != o2 and o3 != o4:
                     # 교점 계산
-                    det = (p1[0] - p2[0]) * (c_p1[1] - c_p2[1]) - (p1[1] - p2[1]) * (c_p1[0] - c_p2[0])
+                    det = (p1[0] - p2[0]) * (c_start[1] - c_end[1]) - (p1[1] - p2[1]) * (c_start[0] - c_end[0])
                     if abs(det) > 1e-6:
-                        t = ((p1[0] - c_p1[0]) * (c_p1[1] - c_p2[1]) - (p1[1] - c_p1[1]) * (c_p1[0] - c_p2[0])) / det
-                        u = -((p1[0] - p2[0]) * (p1[1] - c_p1[1]) - (p1[1] - p2[1]) * (p1[0] - c_p1[0])) / det
+                        t = ((p1[0] - c_start[0]) * (c_start[1] - c_end[1]) - (p1[1] - c_start[1]) * (c_start[0] - c_end[0])) / det
+                        u = -((p1[0] - p2[0]) * (p1[1] - c_start[1]) - (p1[1] - p2[1]) * (p1[0] - c_start[0])) / det
                         if 0 <= t <= 1 and 0 <= u <= 1:
                             intersection_x = p1[0] + t * (p2[0] - p1[0])
                             intersection_y = p1[1] + t * (p2[1] - p1[1])
@@ -257,7 +245,7 @@ class MainController:
         # 교차점 좌표를 가져와서 계산
         points = [self.intersections[i] for i in range(5, 9)]
         if None in points:
-            print("모든 교차점이 감지되지 않았습니다.")
+            QMessageBox.warning(self.view, "Error", "모든 교차점이 감지되지 않았습니다.")
             return None
 
         # 교차점 간 거리 계산
@@ -272,7 +260,7 @@ class MainController:
         # 교차점 좌표를 가져와서 계산
         points = [self.intersections[i] for i in range(1, 5)]
         if None in points:
-            print("모든 교차점이 감지되지 않았습니다.")
+            QMessageBox.warning(self.view, "Error", "모든 교차점이 감지되지 않았습니다.")
             return None
         
         # 교차점 간 거리 계산
@@ -280,34 +268,45 @@ class MainController:
         length_3_4 = math.sqrt((points[2][0] - points[3][0]) ** 2 + (points[2][1] - points[3][1]) ** 2)
 
         # ML 계산
+        if 0 == length_1_2 or 0 == length_3_4:
+            QMessageBox.warning(self.view, "Error", "교차점 간 거리가 0입니다.")
+            return None            
         self.ci = length_1_2 / length_3_4 * 100
     
     def set_table_CI(self):
+        self.calculate_CI()
         if self.ci is None:
-            self.calculate_CI()
-        item = QTableWidgetItem(f"{self.ci:.2f}")
-
-        if self.ci < 85.0:
-            item.setBackground(QBrush(QColor("green")))
-        elif self.ci > 95.0:
-            item.setBackground(QBrush(QColor("red")))
+            QMessageBox.warning(self.view, "Error", "CI 계산에 실패했습니다.")
+            return False
         else:
-            item.setBackground(QBrush(QColor("yellow")))
-        self.view.table.setItem(0, 0, item)
+            item = QTableWidgetItem(f"{self.ci:.2f}")
+
+            if self.ci < 85.0:
+                item.setBackground(QBrush(QColor("green")))
+            elif self.ci > 95.0:
+                item.setBackground(QBrush(QColor("red")))
+            else:
+                item.setBackground(QBrush(QColor("yellow")))
+            self.view.table.setItem(0, 0, item)
+            return True
 
     def set_table_CVAI(self):
+        self.calculate_CVAI()
         if self.cvai is None:
-            self.calculate_CVAI()
-        item = QTableWidgetItem(f"{self.cvai:.2f}")
-
-        if self.cvai < 3.5:
-            item.setBackground(QBrush(QColor("green")))
-        elif self.cvai > 8.75:
-            item.setBackground(QBrush(QColor("red")))
+            QMessageBox.warning(self.view, "Error", "CI 계산에 실패했습니다.")
+            return False
         else:
-            item.setBackground(QBrush(QColor("yellow")))
-        self.view.table.setItem(1, 0, item)
+            item = QTableWidgetItem(f"{self.cvai:.2f}")
 
+            if self.cvai < 3.5:
+                item.setBackground(QBrush(QColor("green")))
+            elif self.cvai > 8.75:
+                item.setBackground(QBrush(QColor("red")))
+            else:
+                item.setBackground(QBrush(QColor("yellow")))
+            self.view.table.setItem(1, 0, item)
+            return True
+        
     def set_scale(self):
         _h, _w = self.original_image.shape[:2]
 
