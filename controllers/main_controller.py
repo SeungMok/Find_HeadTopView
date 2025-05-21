@@ -128,7 +128,6 @@ class MainController:
 
     def draw_analysis_lines_points(self, image, contours):
         x, y, w, h = self.ai.get_roi_coord()  # x,y,w,h
-        min_distance = 10  # 교차점 그릴 때, 근처 중복 점 방지
 
         # ROI 중심점 계산
         center_x = x + w // 2
@@ -137,14 +136,6 @@ class MainController:
         # 분석을 위한 각도 (수평, 수직, 60도, -60도)
         angles = [0, 90, 60, -60]
 
-        intersection_points = [] # 중복 방지 및 거리 계산을 위해 사용
-
-        def is_on_segment(p, a, b):
-            #점 p가 선분 a-b 위에 있는지 확인
-            return (min(a[0], b[0]) <= p[0] <= max(a[0], b[0]) and
-                    min(a[1], b[1]) <= p[1] <= max(a[1], b[1]) and
-                    abs((b[1] - a[1]) * (p[0] - a[0]) - (b[0] - a[0]) * (p[1] - a[1])) < 1e-6)
-
         def find_intersection(contour, p1, p2):
             #윤곽선과 선분의 교차점 찾기
             intersection_pts = []
@@ -152,16 +143,10 @@ class MainController:
                 c_start = contour[i][0]
                 c_end = contour[(i + 1) % len(contour)][0]  # 닫힌 윤곽선 처리
 
-                # 선분 교차 판정
-                def on_segment(p, a, b):
-                    return (min(a[0], b[0]) <= p[0] <= max(a[0], b[0]) and
-                            min(a[1], b[1]) <= p[1] <= max(a[1], b[1]) and
-                            abs((b[1] - a[1]) * (p[0] - a[0]) - (b[0] - a[0]) * (p[1] - a[1])) < 1e-6)
-
                 def orientation(p, q, r):
                     val = (q[1] - p[1]) * (r[0] - q[0]) - (q[0] - p[0]) * (r[1] - q[1])
-                    if abs(val) < 1e-6: return 0  # Collinear
-                    return 1 if val > 0 else 2  # Clockwise or Counterclockwise
+                    if abs(val) < 1e-6: return 0  # 세 점이 일직선 상에 존재재
+                    return 1 if val > 0 else 2  # 1: 시계방향, 2: 반시계방향
 
                 o1 = orientation(p1, p2, c_start)
                 o2 = orientation(p1, p2, c_end)
