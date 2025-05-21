@@ -1,6 +1,6 @@
 # 필수 패키지 설치
-pip install -U pip
-pip install pyqt5 opencv-python numpy ultralytics labelme matplotlib
+pip install -U pip  
+pip install pyqt5 opencv-python numpy ultralytics labelme matplotlib  
   ※주의 labelme를 사용하려면 python 3.11 이하 버전으로 해야 함
 
 # GUI 실행
