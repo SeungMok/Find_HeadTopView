@@ -5,7 +5,7 @@ from config import DEBUG
 
 class Yolo_segmentor:
     def __init__(self):
-        self._model = YOLO("ai/YOLODataset/runs/segment/train/weights/best.pt")
+        self._model = YOLO(r"ai\best.pt")
         self._roi = None
         self._roi_coord = None # (x,y,w,h)
 

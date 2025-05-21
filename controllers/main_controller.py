@@ -158,7 +158,7 @@ class MainController:
                     det = (p1[0] - p2[0]) * (c_start[1] - c_end[1]) - (p1[1] - p2[1]) * (c_start[0] - c_end[0])
                     if abs(det) > 1e-6:
                         t = ((p1[0] - c_start[0]) * (c_start[1] - c_end[1]) - (p1[1] - c_start[1]) * (c_start[0] - c_end[0])) / det
-                        u = -((p1[0] - p2[0]) * (p1[1] - c_start[1]) - (p1[1] - p2[1]) * (p1[0] - c_start[0])) / det
+                        u = -((p1[0] - p2[0]) * (p1[1] - c_start[1]) - (p1[1] - p2[1]) * (p1[0] - c_start[0]) ) / det
                         if 0 <= t <= 1 and 0 <= u <= 1:
                             intersection_x = p1[0] + t * (p2[0] - p1[0])
                             intersection_y = p1[1] + t * (p2[1] - p1[1])
